@@ -1,0 +1,610 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#7C3AED" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="DiaryWell" />
+  <meta name="description" content="A private, offline daily symptom, mood, and trigger journal for chronic conditions." />
+  <meta name="color-scheme" content="light dark" />
+  <meta name="format-detection" content="telephone=no" />
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="icon" href="icons/favicon.png" sizes="32x32" type="image/png" />
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
+  <link rel="stylesheet" href="styles.css" />
+  <title>DiaryWell — Symptom & Mood Journal</title>
+</head>
+<body>
+
+<!-- App boot loader (visible until JS hides it) -->
+<div id="boot" class="boot" aria-live="polite" aria-busy="true">
+  <div class="boot-spinner" aria-hidden="true"></div>
+  <p class="boot-text">Loading your journal…</p>
+</div>
+
+<!-- PIN lock overlay -->
+<div id="pinLock" class="pin-lock" hidden aria-modal="true" role="dialog" aria-labelledby="pinLockTitle">
+  <div class="pin-box">
+    <h2 id="pinLockTitle">Enter your PIN</h2>
+    <p class="muted">Your data stays on this device.</p>
+    <input id="pinInput" inputmode="numeric" pattern="[0-9]*" maxlength="4" autocomplete="off"
+           aria-label="4-digit PIN" placeholder="••••" />
+    <p id="pinError" class="pin-error" role="alert" hidden>That PIN didn't match. Try again.</p>
+    <button id="pinSubmit" class="btn primary">Unlock</button>
+  </div>
+</div>
+
+<!-- Onboarding -->
+<div id="onboarding" class="onboarding" hidden aria-modal="true" role="dialog" aria-labelledby="onboardingTitle">
+  <div class="onb-card">
+    <div class="onb-progress" aria-hidden="true">
+      <span class="onb-dot active"></span>
+      <span class="onb-dot"></span>
+      <span class="onb-dot"></span>
+      <span class="onb-dot"></span>
+    </div>
+
+    <section class="onb-step" data-step="1">
+      <div class="onb-art" aria-hidden="true">
+        <svg viewBox="0 0 120 120" width="100" height="100">
+          <circle cx="60" cy="60" r="56" fill="var(--accent-soft)"/>
+          <path d="M60 28 L84 40 V64 C84 80 72 90 60 96 C48 90 36 80 36 64 V40 Z"
+                fill="none" stroke="var(--accent)" stroke-width="4" stroke-linejoin="round"/>
+          <path d="M50 60 L57 67 L72 52" fill="none" stroke="var(--accent)" stroke-width="4"
+                stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </div>
+      <h1 id="onboardingTitle">Your data stays on this device</h1>
+      <p>DiaryWell never uploads your health information. No accounts, no servers, no analytics. Everything you write is stored privately in your browser, on your phone.</p>
+    </section>
+
+    <section class="onb-step" data-step="2" hidden>
+      <h2>What do you want to track?</h2>
+      <p class="muted">Pick what's relevant. You can change these any time in Settings.</p>
+      <div class="onb-pillgroup">
+        <h3>Symptoms</h3>
+        <div id="onbSymptoms" class="pill-grid"></div>
+      </div>
+      <div class="onb-pillgroup">
+        <h3>Triggers</h3>
+        <div id="onbTriggers" class="pill-grid"></div>
+      </div>
+    </section>
+
+    <section class="onb-step" data-step="3" hidden>
+      <div class="onb-art" aria-hidden="true">
+        <svg viewBox="0 0 120 120" width="100" height="100">
+          <circle cx="60" cy="60" r="48" fill="none" stroke="var(--accent)" stroke-width="4"/>
+          <path d="M60 36 V60 L76 70" stroke="var(--accent)" stroke-width="4" stroke-linecap="round" fill="none"/>
+        </svg>
+      </div>
+      <h2>A gentle daily reminder</h2>
+      <p>One quick check-in at the same time each day makes patterns visible. Pick a time that fits your routine — you can change or turn this off whenever.</p>
+      <label class="field">
+        <span>Reminder time</span>
+        <input id="onbReminderTime" type="time" value="20:00" />
+      </label>
+      <label class="check">
+        <input id="onbReminderOn" type="checkbox" checked />
+        <span>Remind me daily</span>
+      </label>
+    </section>
+
+    <section class="onb-step" data-step="4" hidden>
+      <div class="onb-art" aria-hidden="true">
+        <svg viewBox="0 0 120 120" width="100" height="100">
+          <rect x="24" y="20" width="72" height="84" rx="8" fill="none" stroke="var(--accent)" stroke-width="4"/>
+          <line x1="36" y1="40" x2="84" y2="40" stroke="var(--accent)" stroke-width="3" stroke-linecap="round"/>
+          <line x1="36" y1="56" x2="84" y2="56" stroke="var(--accent)" stroke-width="3" stroke-linecap="round"/>
+          <line x1="36" y1="72" x2="68" y2="72" stroke="var(--accent)" stroke-width="3" stroke-linecap="round"/>
+        </svg>
+      </div>
+      <h2>Ready when you are</h2>
+      <p>Your first check-in takes less than 30 seconds. There's no right or wrong way to log a day — just answer what feels true right now.</p>
+    </section>
+
+    <div class="onb-controls">
+      <button id="onbBack" class="btn ghost" hidden>Back</button>
+      <button id="onbNext" class="btn primary">Next</button>
+    </div>
+  </div>
+</div>
+
+<!-- Top bar -->
+<header class="topbar" role="banner">
+  <div class="brand">
+    <svg class="brand-mark" viewBox="0 0 32 32" width="28" height="28" aria-hidden="true">
+      <rect x="2" y="2" width="28" height="28" rx="7" fill="var(--accent)"/>
+      <path d="M9 8 H21 A2 2 0 0 1 23 10 V24 A1 1 0 0 1 21.5 24.87 L16 22 L10.5 24.87 A1 1 0 0 1 9 24 Z"
+            fill="none" stroke="#fff" stroke-width="2" stroke-linejoin="round"/>
+      <path d="M11 18 Q14 14 16 18 T21 18" fill="none" stroke="#fff" stroke-width="1.8"
+            stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>
+    <span class="brand-name">DiaryWell</span>
+  </div>
+  <div class="top-actions">
+    <button id="installBtn" class="btn small ghost" hidden aria-label="Install DiaryWell as an app">Install</button>
+  </div>
+</header>
+
+<!-- In-app install banner -->
+<div id="installBanner" class="banner" hidden>
+  <span>Add DiaryWell to your home screen for one-tap check-ins.</span>
+  <button id="installBannerBtn" class="btn small primary">Add</button>
+  <button id="installDismiss" class="btn small ghost" aria-label="Dismiss install banner">Not now</button>
+</div>
+
+<main id="main" class="main" tabindex="-1">
+
+  <!-- ===== TODAY ===== -->
+  <section id="view-today" class="view" aria-labelledby="todayHeading">
+    <div class="view-head">
+      <h1 id="todayHeading">Today</h1>
+      <p id="todayDate" class="muted"></p>
+    </div>
+
+    <div class="streak-card" aria-live="polite">
+      <span id="streakText">Welcome — log your first check-in below.</span>
+    </div>
+
+    <!-- Mood -->
+    <fieldset class="card">
+      <legend>How is your mood?</legend>
+      <div class="mood-row" role="radiogroup" aria-label="Mood">
+        <button class="mood-face" role="radio" data-mood="1" aria-checked="false" aria-label="Very low mood">
+          <svg viewBox="0 0 48 48" width="44" height="44" aria-hidden="true">
+            <circle cx="24" cy="24" r="20" fill="var(--mood-1)" />
+            <circle cx="17" cy="20" r="2" fill="#222"/>
+            <circle cx="31" cy="20" r="2" fill="#222"/>
+            <path d="M15 34 Q24 26 33 34" stroke="#222" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+            <path d="M14 16 L20 19" stroke="#222" stroke-width="1.5" fill="none" stroke-linecap="round"/>
+            <path d="M34 16 L28 19" stroke="#222" stroke-width="1.5" fill="none" stroke-linecap="round"/>
+          </svg>
+          <span class="mood-label">Very low</span>
+        </button>
+        <button class="mood-face" role="radio" data-mood="2" aria-checked="false" aria-label="Low mood">
+          <svg viewBox="0 0 48 48" width="44" height="44" aria-hidden="true">
+            <circle cx="24" cy="24" r="20" fill="var(--mood-2)" />
+            <circle cx="17" cy="20" r="2" fill="#222"/>
+            <circle cx="31" cy="20" r="2" fill="#222"/>
+            <path d="M16 33 Q24 28 32 33" stroke="#222" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+          </svg>
+          <span class="mood-label">Low</span>
+        </button>
+        <button class="mood-face" role="radio" data-mood="3" aria-checked="false" aria-label="Neutral mood">
+          <svg viewBox="0 0 48 48" width="44" height="44" aria-hidden="true">
+            <circle cx="24" cy="24" r="20" fill="var(--mood-3)" />
+            <circle cx="17" cy="20" r="2" fill="#222"/>
+            <circle cx="31" cy="20" r="2" fill="#222"/>
+            <line x1="16" y1="32" x2="32" y2="32" stroke="#222" stroke-width="2.5" stroke-linecap="round"/>
+          </svg>
+          <span class="mood-label">Neutral</span>
+        </button>
+        <button class="mood-face" role="radio" data-mood="4" aria-checked="false" aria-label="Good mood">
+          <svg viewBox="0 0 48 48" width="44" height="44" aria-hidden="true">
+            <circle cx="24" cy="24" r="20" fill="var(--mood-4)" />
+            <circle cx="17" cy="20" r="2" fill="#222"/>
+            <circle cx="31" cy="20" r="2" fill="#222"/>
+            <path d="M16 30 Q24 36 32 30" stroke="#222" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+          </svg>
+          <span class="mood-label">Good</span>
+        </button>
+        <button class="mood-face" role="radio" data-mood="5" aria-checked="false" aria-label="Great mood">
+          <svg viewBox="0 0 48 48" width="44" height="44" aria-hidden="true">
+            <circle cx="24" cy="24" r="20" fill="var(--mood-5)" />
+            <circle cx="17" cy="19" r="2" fill="#222"/>
+            <circle cx="31" cy="19" r="2" fill="#222"/>
+            <path d="M14 29 Q24 40 34 29" stroke="#222" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+          </svg>
+          <span class="mood-label">Great</span>
+        </button>
+      </div>
+    </fieldset>
+
+    <!-- Pain -->
+    <div class="card">
+      <label class="slider-label" for="painSlider">
+        <span>Pain level</span>
+        <span class="slider-value"><span id="painValue">0</span> · <span id="painAnchor">none</span></span>
+      </label>
+      <input id="painSlider" type="range" min="0" max="10" step="1" value="0"
+             aria-valuetext="0, none" />
+      <div class="slider-ticks" aria-hidden="true">
+        <span>0</span><span>2</span><span>4</span><span>6</span><span>8</span><span>10</span>
+      </div>
+    </div>
+
+    <!-- Energy -->
+    <div class="card">
+      <label class="slider-label" for="energySlider">
+        <span>Energy level</span>
+        <span class="slider-value"><span id="energyValue">5</span> / 10</span>
+      </label>
+      <input id="energySlider" type="range" min="0" max="10" step="1" value="5"
+             aria-valuetext="5 out of 10" />
+      <div class="slider-ticks" aria-hidden="true">
+        <span>empty</span><span>okay</span><span>full</span>
+      </div>
+    </div>
+
+    <!-- Sleep -->
+    <div class="card sleep-card">
+      <h2>Sleep last night</h2>
+      <div class="sleep-row">
+        <label class="field">
+          <span>Hours</span>
+          <input id="sleepHours" type="number" min="0" max="24" step="0.25" inputmode="decimal" />
+        </label>
+        <fieldset class="rating">
+          <legend>Quality</legend>
+          <div class="star-row" role="radiogroup" aria-label="Sleep quality">
+            <button class="star" data-q="1" role="radio" aria-checked="false" aria-label="1 of 5">1</button>
+            <button class="star" data-q="2" role="radio" aria-checked="false" aria-label="2 of 5">2</button>
+            <button class="star" data-q="3" role="radio" aria-checked="false" aria-label="3 of 5">3</button>
+            <button class="star" data-q="4" role="radio" aria-checked="false" aria-label="4 of 5">4</button>
+            <button class="star" data-q="5" role="radio" aria-checked="false" aria-label="5 of 5">5</button>
+          </div>
+        </fieldset>
+      </div>
+    </div>
+
+    <!-- Symptoms -->
+    <div class="card">
+      <div class="card-head">
+        <h2>Symptoms today</h2>
+        <button class="btn small ghost" data-go="settings-symptoms">Manage</button>
+      </div>
+      <div id="symptomGrid" class="pill-grid" aria-label="Symptoms"></div>
+    </div>
+
+    <!-- Triggers -->
+    <div class="card">
+      <div class="card-head">
+        <h2>Possible triggers</h2>
+        <button class="btn small ghost" data-go="settings-triggers">Manage</button>
+      </div>
+      <div id="triggerGrid" class="pill-grid" aria-label="Triggers"></div>
+    </div>
+
+    <!-- Meds -->
+    <div class="card">
+      <div class="card-head">
+        <h2>Medications taken</h2>
+        <button class="btn small ghost" data-go="settings-meds">Manage list</button>
+      </div>
+      <div id="medGrid" class="pill-grid" aria-label="Medications"></div>
+      <label class="field mt">
+        <span>Other (free text)</span>
+        <input id="medOther" type="text" placeholder="e.g. extra ibuprofen 200mg" maxlength="200" />
+      </label>
+    </div>
+
+    <!-- Context note -->
+    <div class="card">
+      <label class="field">
+        <span>Context / notes</span>
+        <textarea id="noteField" rows="3" maxlength="1000"
+                  placeholder="What stood out today? e.g. worked late, skipped lunch, heat wave."></textarea>
+      </label>
+    </div>
+
+    <button id="saveBtn" class="btn primary big">Save today's check-in</button>
+    <p id="saveStatus" class="muted center mt" aria-live="polite"></p>
+  </section>
+
+  <!-- ===== HISTORY ===== -->
+  <section id="view-history" class="view" hidden aria-labelledby="historyHeading">
+    <div class="view-head">
+      <h1 id="historyHeading">History</h1>
+    </div>
+
+    <div role="tablist" class="tabs" aria-label="History tabs">
+      <button class="tab active" role="tab" id="tab-heatmap" aria-selected="true" aria-controls="panel-heatmap">Calendar</button>
+      <button class="tab" role="tab" id="tab-trends" aria-selected="false" aria-controls="panel-trends">Trends</button>
+      <button class="tab" role="tab" id="tab-triggers" aria-selected="false" aria-controls="panel-triggers">Triggers</button>
+    </div>
+
+    <div id="panel-heatmap" class="panel" role="tabpanel" aria-labelledby="tab-heatmap">
+      <p class="muted small">Each square is a day. Darker means a tougher day (higher pain, lower mood). Tap a day to read the full entry.</p>
+      <div id="heatmapWrap" class="heatmap-wrap" tabindex="0" aria-label="Calendar heatmap, use arrow keys to navigate days">
+        <canvas id="heatmapCanvas" width="700" height="220"></canvas>
+      </div>
+      <div id="heatmapLegend" class="legend" aria-hidden="true">
+        <span class="lg-label">lighter day</span>
+        <span class="lg-cell" style="background:var(--cell-1)"></span>
+        <span class="lg-cell" style="background:var(--cell-2)"></span>
+        <span class="lg-cell" style="background:var(--cell-3)"></span>
+        <span class="lg-cell" style="background:var(--cell-4)"></span>
+        <span class="lg-cell" style="background:var(--cell-5)"></span>
+        <span class="lg-label">tougher day</span>
+      </div>
+      <div id="dayDetail" class="day-detail" hidden></div>
+    </div>
+
+    <div id="panel-trends" class="panel" role="tabpanel" aria-labelledby="tab-trends" hidden>
+      <div class="range-row" role="radiogroup" aria-label="Range">
+        <button class="range-btn active" data-range="7" role="radio" aria-checked="true">7 days</button>
+        <button class="range-btn" data-range="30" role="radio" aria-checked="false">30 days</button>
+        <button class="range-btn" data-range="90" role="radio" aria-checked="false">90 days</button>
+      </div>
+      <div class="chart-block">
+        <h2>Mood</h2>
+        <canvas id="moodChart" width="700" height="220" aria-label="Mood over time"></canvas>
+        <p id="moodSummary" class="muted small"></p>
+      </div>
+      <div class="chart-block">
+        <h2>Pain</h2>
+        <canvas id="painChart" width="700" height="220" aria-label="Pain over time"></canvas>
+        <p id="painSummary" class="muted small"></p>
+      </div>
+      <div class="chart-block">
+        <h2>Energy</h2>
+        <canvas id="energyChart" width="700" height="220" aria-label="Energy over time"></canvas>
+        <p id="energySummary" class="muted small"></p>
+      </div>
+      <div class="chart-block">
+        <h2>Sleep (hours)</h2>
+        <canvas id="sleepChart" width="700" height="220" aria-label="Sleep hours over time"></canvas>
+        <p id="sleepSummary" class="muted small"></p>
+      </div>
+    </div>
+
+    <div id="panel-triggers" class="panel" role="tabpanel" aria-labelledby="tab-triggers" hidden>
+      <p class="muted small">Triggers most often present on your highest-pain days (last 90 days).</p>
+      <div id="triggerAnalysis" class="bar-list" aria-live="polite"></div>
+      <div class="chart-block">
+        <h2>Top symptoms</h2>
+        <div id="symptomAnalysis" class="bar-list"></div>
+      </div>
+    </div>
+
+    <div class="search-block">
+      <label class="field">
+        <span>Search notes</span>
+        <input id="searchNotes" type="search" placeholder="e.g. weather, work, lunch" />
+      </label>
+      <div id="searchResults" class="search-results" aria-live="polite"></div>
+    </div>
+  </section>
+
+  <!-- ===== REPORT ===== -->
+  <section id="view-report" class="view" hidden aria-labelledby="reportHeading">
+    <div class="view-head">
+      <h1 id="reportHeading">Doctor report</h1>
+      <p class="muted">Build a printable summary for your next appointment. Nothing leaves your device.</p>
+    </div>
+
+    <div class="card">
+      <label class="field">
+        <span>Your name (optional, appears on the report)</span>
+        <input id="reportName" type="text" maxlength="80" />
+      </label>
+      <div class="row">
+        <label class="field">
+          <span>From</span>
+          <input id="reportFrom" type="date" />
+        </label>
+        <label class="field">
+          <span>To</span>
+          <input id="reportTo" type="date" />
+        </label>
+      </div>
+      <div class="row">
+        <button id="reportPreviewBtn" class="btn primary">Preview report</button>
+        <button id="reportPrintBtn" class="btn ghost">Print / save as PDF</button>
+        <button id="reportShareBtn" class="btn ghost" hidden>Share</button>
+      </div>
+    </div>
+
+    <div id="reportPreview" class="report-preview" hidden></div>
+  </section>
+
+  <!-- ===== SETTINGS ===== -->
+  <section id="view-settings" class="view" hidden aria-labelledby="settingsHeading">
+    <div class="view-head">
+      <h1 id="settingsHeading">Settings</h1>
+    </div>
+
+    <div class="card">
+      <h2>Reminders</h2>
+      <label class="check">
+        <input id="setReminderOn" type="checkbox" />
+        <span>Daily check-in reminder</span>
+      </label>
+      <label class="field">
+        <span>Time</span>
+        <input id="setReminderTime" type="time" />
+      </label>
+      <p class="muted small">Reminders use your device's notifications. You can turn them off any time.</p>
+    </div>
+
+    <div class="card">
+      <h2>Appearance</h2>
+      <label class="field">
+        <span>Theme</span>
+        <select id="setTheme">
+          <option value="system">Match my device</option>
+          <option value="light">Light</option>
+          <option value="dark">Dark</option>
+        </select>
+      </label>
+      <label class="check">
+        <input id="setLargeText" type="checkbox" />
+        <span>Larger text</span>
+      </label>
+    </div>
+
+    <div class="card">
+      <h2>Preferences</h2>
+      <label class="field">
+        <span>Default chart range</span>
+        <select id="setRange">
+          <option value="7">7 days</option>
+          <option value="30">30 days</option>
+          <option value="90">90 days</option>
+        </select>
+      </label>
+      <label class="field">
+        <span>Sleep units</span>
+        <select id="setSleepUnits">
+          <option value="hours">Hours</option>
+          <option value="hm">Hours &amp; minutes</option>
+        </select>
+      </label>
+    </div>
+
+    <div class="card" id="settings-symptoms">
+      <h2>Symptoms</h2>
+      <div id="settingSymptoms" class="tag-editor"></div>
+      <div class="add-row">
+        <input id="newSymptom" type="text" placeholder="Add a symptom" maxlength="40" />
+        <select id="newSymptomColor" aria-label="Color">
+          <option value="violet">violet</option>
+          <option value="teal">teal</option>
+          <option value="amber">amber</option>
+          <option value="rose">rose</option>
+          <option value="sky">sky</option>
+          <option value="lime">lime</option>
+        </select>
+        <button id="addSymptomBtn" class="btn small primary">Add</button>
+      </div>
+    </div>
+
+    <div class="card" id="settings-triggers">
+      <h2>Triggers</h2>
+      <div id="settingTriggers" class="tag-editor"></div>
+      <div class="add-row">
+        <input id="newTrigger" type="text" placeholder="Add a trigger" maxlength="40" />
+        <select id="newTriggerColor" aria-label="Color">
+          <option value="amber">amber</option>
+          <option value="rose">rose</option>
+          <option value="violet">violet</option>
+          <option value="teal">teal</option>
+          <option value="sky">sky</option>
+          <option value="lime">lime</option>
+        </select>
+        <button id="addTriggerBtn" class="btn small primary">Add</button>
+      </div>
+    </div>
+
+    <div class="card" id="settings-meds">
+      <h2>Medications</h2>
+      <p class="muted small">Just a name list to tap from on the check-in. No schedules, no reminders — that's a separate kind of app.</p>
+      <div id="settingMeds" class="tag-editor"></div>
+      <div class="add-row">
+        <input id="newMed" type="text" placeholder="Add a medication" maxlength="60" />
+        <button id="addMedBtn" class="btn small primary">Add</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Privacy lock</h2>
+      <label class="check">
+        <input id="setPinOn" type="checkbox" />
+        <span>Require a 4-digit PIN to open</span>
+      </label>
+      <div id="pinSetupRow" class="row" hidden>
+        <label class="field">
+          <span>New PIN</span>
+          <input id="newPin" inputmode="numeric" pattern="[0-9]*" maxlength="4" type="password" />
+        </label>
+        <label class="field">
+          <span>Confirm</span>
+          <input id="newPinConfirm" inputmode="numeric" pattern="[0-9]*" maxlength="4" type="password" />
+        </label>
+        <button id="savePinBtn" class="btn small primary">Save PIN</button>
+      </div>
+      <p class="muted small">Your PIN is hashed locally with Web Crypto. We can't recover it — if you forget it, you'll need to clear data and start fresh.</p>
+    </div>
+
+    <div class="card">
+      <h2>Backup &amp; restore</h2>
+      <p class="muted small">Export your journal as a JSON file you control. Import it back on another device or after reinstalling.</p>
+      <div class="row">
+        <button id="exportJsonBtn" class="btn primary">Export JSON</button>
+        <button id="importJsonBtn" class="btn ghost">Import JSON</button>
+        <input id="importFile" type="file" accept="application/json,.json" hidden />
+      </div>
+    </div>
+
+    <div class="card danger">
+      <h2>Clear all data</h2>
+      <p class="muted small">Deletes every entry, tag, and setting on this device. Cannot be undone. Consider exporting a backup first.</p>
+      <button id="clearDataBtn" class="btn warn">Clear all data…</button>
+    </div>
+
+    <div class="card">
+      <h2>If you're in crisis</h2>
+      <p>If you're in immediate distress, please reach out. In the United States, call or text <strong>988</strong> (Suicide &amp; Crisis Lifeline). In the UK, call <strong>116 123</strong> (Samaritans). Outside those, your local emergency number or <em>findahelpline.com</em> can help.</p>
+      <p class="muted small">DiaryWell is a self-tracking tool, not a substitute for medical care. Always talk with your clinician about treatment decisions.</p>
+    </div>
+
+    <div class="card">
+      <h2>About</h2>
+      <p class="muted small">DiaryWell v1.0 · No accounts · No tracking · No ads · Works offline · Made for people living with chronic conditions.</p>
+    </div>
+  </section>
+</main>
+
+<!-- Bottom nav -->
+<nav class="tabbar" role="navigation" aria-label="Main">
+  <button class="tabbar-btn active" data-view="today" aria-label="Today">
+    <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
+      <rect x="3.5" y="5" width="17" height="15" rx="2" fill="none" stroke="currentColor" stroke-width="1.8"/>
+      <line x1="3.5" y1="9.5" x2="20.5" y2="9.5" stroke="currentColor" stroke-width="1.8"/>
+      <line x1="8" y1="3" x2="8" y2="7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+      <line x1="16" y1="3" x2="16" y2="7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+    </svg>
+    <span>Today</span>
+  </button>
+  <button class="tabbar-btn" data-view="history" aria-label="History">
+    <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
+      <path d="M4 12 A8 8 0 1 1 12 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+      <polyline points="4 7 4 12 9 12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+      <polyline points="12 8 12 12 15 14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>
+    <span>History</span>
+  </button>
+  <button class="tabbar-btn" data-view="report" aria-label="Doctor report">
+    <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
+      <path d="M7 3 H15 L19 7 V21 H5 V3 Z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>
+      <line x1="8" y1="12" x2="16" y2="12" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+      <line x1="8" y1="16" x2="16" y2="16" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+    </svg>
+    <span>Report</span>
+  </button>
+  <button class="tabbar-btn" data-view="settings" aria-label="Settings">
+    <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
+      <circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="1.8"/>
+      <path d="M19 12 a7 7 0 0 0 -0.2 -1.7 l1.7 -1.3 -1.8 -3.1 -2 0.7 a7 7 0 0 0 -3 -1.7 l -0.4 -2.1 h -3.6 l -0.4 2.1 a7 7 0 0 0 -3 1.7 l -2 -0.7 -1.8 3.1 1.7 1.3 a7 7 0 0 0 0 3.4 l -1.7 1.3 1.8 3.1 2 -0.7 a7 7 0 0 0 3 1.7 l 0.4 2.1 h 3.6 l 0.4 -2.1 a7 7 0 0 0 3 -1.7 l 2 0.7 1.8 -3.1 -1.7 -1.3 a7 7 0 0 0 0.2 -1.7 z"
+            fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
+    </svg>
+    <span>Settings</span>
+  </button>
+</nav>
+
+<!-- Toast -->
+<div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+
+<!-- Confirm modal -->
+<div id="confirm" class="modal" hidden aria-modal="true" role="dialog" aria-labelledby="confirmTitle">
+  <div class="modal-card">
+    <h2 id="confirmTitle">Are you sure?</h2>
+    <p id="confirmBody"></p>
+    <div class="row end">
+      <button id="confirmCancel" class="btn ghost">Cancel</button>
+      <button id="confirmOk" class="btn warn">Confirm</button>
+    </div>
+  </div>
+</div>
+
+<script src="db.js"></script>
+<script src="chart.js"></script>
+<script src="pdf.js"></script>
+<script src="ui.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
