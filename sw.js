@@ -4,7 +4,7 @@
    - Schedules a daily reminder notification via setTimeout while the SW is alive.
 */
 
-const VERSION = 'diarywell-v1.0.0';
+const VERSION = 'diarywell-v1.0.1';
 const CACHE = VERSION;
 
 const SHELL = [

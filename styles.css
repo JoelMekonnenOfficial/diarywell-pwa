@@ -636,3 +636,6 @@ input[type="range"]::-moz-range-thumb {
   .topbar { background: var(--bg); }
   .tabbar { background: var(--surface); }
 }
+
+/* Fix: the hidden attribute must always win over display rules (lock screen, dialogs and empty states were showing when they should not). */
+[hidden] { display: none !important; }
