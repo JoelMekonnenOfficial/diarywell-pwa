@@ -1266,7 +1266,60 @@
 
   /* ---------- Notifications ---------- */
 
+  // Inside the iPhone app, reminders are handed to iOS as local notifications, so they
+  // arrive even when the app is closed. Nothing leaves the device.
+  function nativeReminders() {
+    try {
+      var h = window.webkit && window.webkit.messageHandlers;
+      return (h && h['local-reminders']) ? h : null;
+    } catch (e) { return null; }
+  }
+
+  function scheduleNativeReminders() {
+    var h = nativeReminders();
+    if (!h) return;
+    var items = [];
+    if (state.settings.reminderOn) {
+      var parts = String(state.settings.reminderTime || '20:00').split(':');
+      var hh = parseInt(parts[0], 10);
+      var mm = parseInt(parts[1], 10);
+      if (!isNaN(hh) && !isNaN(mm)) {
+        var now = Date.now();
+        for (var i = 0; i < 32 && items.length < 30; i++) {
+          var d = new Date();
+          d.setDate(d.getDate() + i);
+          d.setHours(hh, mm, 0, 0);
+          if (d.getTime() > now + 60000) {
+            items.push({
+              id: 'daily-' + d.getFullYear() + '-' + (d.getMonth() + 1) + '-' + d.getDate(),
+              title: 'A moment for today?',
+              body: 'Take 30 seconds for your DiaryWell check-in whenever you can.',
+              at: d.getTime()
+            });
+          }
+        }
+      }
+    }
+    try {
+      h['local-reminders'].postMessage(JSON.stringify({ action: 'set', items: items }));
+    } catch (e) { /* best-effort */ }
+  }
+
   function requestNotificationPermission() {
+    var native = nativeReminders();
+    if (native) {
+      var onResult = function (e) {
+        window.removeEventListener('push-permission-request', onResult);
+        if (e && e.detail === 'granted') {
+          scheduleNativeReminders();
+        } else {
+          UI.toast('Notifications are off for DiaryWell. Turn them on in iPhone Settings to get reminders.');
+        }
+      };
+      window.addEventListener('push-permission-request', onResult);
+      try { native['push-permission-request'].postMessage('request'); } catch (e) { /* best-effort */ }
+      return;
+    }
     if (!('Notification' in window)) return;
     if (Notification.permission === 'granted') { sendReminderSettingsToSW(); return; }
     if (Notification.permission === 'denied') return;
@@ -1276,6 +1329,7 @@
   }
 
   function sendReminderSettingsToSW() {
+    if (nativeReminders()) { scheduleNativeReminders(); return; }
     if (!navigator.serviceWorker || !navigator.serviceWorker.controller) return;
     navigator.serviceWorker.controller.postMessage({
       type: 'reminder',
@@ -1287,6 +1341,13 @@
   /* ---------- Service Worker ---------- */
 
   function registerSW() {
+    if (nativeReminders()) {
+      // Keep the next 30 days of reminders topped up every time the app is opened.
+      scheduleNativeReminders();
+      document.addEventListener('visibilitychange', function () {
+        if (document.visibilityState === 'visible') scheduleNativeReminders();
+      });
+    }
     if (!('serviceWorker' in navigator)) return Promise.resolve();
     return navigator.serviceWorker.register('sw.js').then(function () {
       // Once controller is active, push reminder settings.
